@@ -25,7 +25,7 @@
 		 XSync(display, false))
 	#define X_KEY_EVENT_WAIT(display, key, is_press) \
 		(X_KEY_EVENT(display, key, is_press), \
-		 microsleep(DEADBEEF_UNIFORM(0.0, 62.5)))
+		 microsleep(DEADBEEF_UNIFORM(62.5, 125.0)))
 #endif
 
 #if defined(IS_MACOSX)
@@ -101,9 +101,12 @@ void win32KeyEvent(int key, MMKeyFlags flags)
 	if ( flags & KEYEVENTF_KEYUP ) {
 		scan |= 0x80;
 	}
+
+	flags |= KEYEVENTF_SCANCODE;
+
 	INPUT keyboardInput;
 	keyboardInput.type = INPUT_KEYBOARD;
-	keyboardInput.ki.wVk = key;
+	keyboardInput.ki.wVk = 0;
 	keyboardInput.ki.wScan = scan;
 	keyboardInput.ki.dwFlags = flags;
 	keyboardInput.ki.time = 0;
@@ -140,24 +143,46 @@ void toggleKeyCode(MMKeyCode code, const bool down, MMKeyFlags flags)
 #elif defined(IS_WINDOWS)
 	const DWORD dwFlags = down ? 0 : KEYEVENTF_KEYUP;
 
-	/* Parse modifier keys. */
-	if (flags & MOD_META) WIN32_KEY_EVENT_WAIT(K_META, dwFlags);
-	if (flags & MOD_ALT) WIN32_KEY_EVENT_WAIT(K_ALT, dwFlags);
-	if (flags & MOD_CONTROL) WIN32_KEY_EVENT_WAIT(K_CONTROL, dwFlags);
-	if (flags & MOD_SHIFT) WIN32_KEY_EVENT_WAIT(K_SHIFT, dwFlags);
+	if (down) {
+		/* Parse modifier keys. */
+		if (flags & MOD_META) WIN32_KEY_EVENT_WAIT(K_META, dwFlags);
+		if (flags & MOD_ALT) WIN32_KEY_EVENT_WAIT(K_ALT, dwFlags);
+		if (flags & MOD_CONTROL) WIN32_KEY_EVENT_WAIT(K_CONTROL, dwFlags);
+		if (flags & MOD_SHIFT) WIN32_KEY_EVENT_WAIT(K_SHIFT, dwFlags);
 
-	win32KeyEvent(code, dwFlags);
+		WIN32_KEY_EVENT_WAIT(code, dwFlags);
+	} else {
+		/* Reverse order for key up */
+		WIN32_KEY_EVENT_WAIT(code, dwFlags);
+
+		/* Parse modifier keys. */
+		if (flags & MOD_META) win32KeyEvent(K_META, dwFlags);
+		if (flags & MOD_ALT) win32KeyEvent(K_ALT, dwFlags);
+		if (flags & MOD_CONTROL) win32KeyEvent(K_CONTROL, dwFlags);
+		if (flags & MOD_SHIFT) win32KeyEvent(K_SHIFT, dwFlags);
+	}
 #elif defined(USE_X11)
 	Display *display = XGetMainDisplay();
 	const Bool is_press = down ? True : False; /* Just to be safe. */
 
-	/* Parse modifier keys. */
-	if (flags & MOD_META) X_KEY_EVENT_WAIT(display, K_META, is_press);
-	if (flags & MOD_ALT) X_KEY_EVENT_WAIT(display, K_ALT, is_press);
-	if (flags & MOD_CONTROL) X_KEY_EVENT_WAIT(display, K_CONTROL, is_press);
-	if (flags & MOD_SHIFT) X_KEY_EVENT_WAIT(display, K_SHIFT, is_press);
+	if (down) {
+		/* Parse modifier keys. */
+		if (flags & MOD_META) X_KEY_EVENT_WAIT(display, K_META, is_press);
+		if (flags & MOD_ALT) X_KEY_EVENT_WAIT(display, K_ALT, is_press);
+		if (flags & MOD_CONTROL) X_KEY_EVENT_WAIT(display, K_CONTROL, is_press);
+		if (flags & MOD_SHIFT) X_KEY_EVENT_WAIT(display, K_SHIFT, is_press);
 
-	X_KEY_EVENT(display, code, is_press);
+		X_KEY_EVENT_WAIT(display, code, is_press);
+	} else {
+		/* Reverse order for key up */
+		X_KEY_EVENT_WAIT(display, code, is_press);
+
+		/* Parse modifier keys. */
+		if (flags & MOD_META) X_KEY_EVENT(display, K_META, is_press);
+		if (flags & MOD_ALT) X_KEY_EVENT(display, K_ALT, is_press);
+		if (flags & MOD_CONTROL) X_KEY_EVENT(display, K_CONTROL, is_press);
+		if (flags & MOD_SHIFT) X_KEY_EVENT(display, K_SHIFT, is_press);
+	}
 #endif
 }
 
@@ -197,12 +222,12 @@ void tapKey(char c, MMKeyFlags flags)
 }
 
 #if defined(IS_MACOSX)
-void toggleUnicodeKey(unsigned long ch, const bool down)
+void toggleUnicode(UniChar ch, const bool down)
 {
 	/* This function relies on the convenient
 	 * CGEventKeyboardSetUnicodeString(), which allows us to not have to
 	 * convert characters to a keycode, but does not support adding modifier
-	 * flags. It is therefore only used in typeString() and typeStringDelayed()
+	 * flags. It is therefore only used in typeStringDelayed()
 	 * -- if you need modifier keys, use the above functions instead. */
 	CGEventRef keyEvent = CGEventCreateKeyboardEvent(NULL, 0, down);
 	if (keyEvent == NULL) {
@@ -225,28 +250,43 @@ void toggleUnicodeKey(unsigned long ch, const bool down)
 	CGEventPost(kCGSessionEventTap, keyEvent);
 	CFRelease(keyEvent);
 }
-
-void toggleUniKey(char c, const bool down)
-{
-	toggleUnicodeKey(c, down);
-}
-#else
-	#define toggleUniKey(c, down) toggleKey(c, down, MOD_NONE)
 #endif
 
-static void tapUniKey(char c)
+void unicodeTap(const unsigned value)
 {
-	toggleUniKey(c, true);
-	toggleUniKey(c, false);
+	#if defined(IS_MACOSX)
+		UniChar ch = (UniChar)value; // Convert to unsigned char
+
+		toggleUnicode(ch, true);
+		toggleUnicode(ch, false);
+	#elif defined(IS_WINDOWS)
+		INPUT ip;
+
+		// Set up a generic keyboard event.
+		ip.type = INPUT_KEYBOARD;
+		ip.ki.wVk = 0; // Virtual-key code
+		ip.ki.wScan = value; // Hardware scan code for key
+		ip.ki.time = 0; // System will provide its own time stamp.
+		ip.ki.dwExtraInfo = 0; // No extra info. Use the GetMessageExtraInfo function to obtain this information if needed.
+		ip.ki.dwFlags = KEYEVENTF_UNICODE; // KEYEVENTF_KEYUP for key release.
+
+		SendInput(1, &ip, sizeof(INPUT));
+	#endif
 }
 
-void typeString(const char *str)
+void typeStringDelayed(const char *str, const unsigned cpm)
 {
+	unsigned long n;
 	unsigned short c;
 	unsigned short c1;
 	unsigned short c2;
 	unsigned short c3;
-	unsigned long n;
+
+	/* Characters per second */
+	const double cps = (double)cpm / 60.0;
+
+	/* Average milli-seconds per character */
+	const double mspc = (cps == 0.0) ? 0.0 : 1000.0 / cps;
 
 	while (*str != '\0') {
 		c = *str++;
@@ -273,27 +313,10 @@ void typeString(const char *str)
 			n = ((c & 0x07) << 18) | (c1 << 12) | (c2 << 6) | c3;
 		}
 
-		#if defined(IS_MACOSX)
-		toggleUnicodeKey(n, true);
-		toggleUnicodeKey(n, false);
-		#else
-		toggleUniKey(n, true);
-		toggleUniKey(n, false);
-		#endif
+		unicodeTap(n);
 
-	}
-}
-
-void typeStringDelayed(const char *str, const unsigned cpm)
-{
-	/* Characters per second */
-	const double cps = (double)cpm / 60.0;
-
-	/* Average milli-seconds per character */
-	const double mspc = (cps == 0.0) ? 0.0 : 1000.0 / cps;
-
-	while (*str != '\0') {
-		tapUniKey(*str++);
-		microsleep(mspc + (DEADBEEF_UNIFORM(0.0, 62.5)));
+		if (mspc > 0) {
+			microsleep(mspc + (DEADBEEF_UNIFORM(0.0, 62.5)));
+		}
 	}
 }
