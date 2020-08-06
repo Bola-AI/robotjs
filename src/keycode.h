@@ -5,7 +5,7 @@
 #include "os.h"
 
 #ifdef __cplusplus
-extern "C" 
+extern "C"
 {
 #endif
 
@@ -14,7 +14,7 @@ extern "C"
 #include <Carbon/Carbon.h> /* Really only need <HIToolbox/Events.h> */
 #include <ApplicationServices/ApplicationServices.h>
 #import <IOKit/hidsystem/ev_keymap.h>
-	
+
 enum _MMKeyCode {
 	K_NOT_A_KEY = 9999,
 	K_BACKSPACE = kVK_Delete,
@@ -293,7 +293,9 @@ enum _MMKeyCode {
 	K_LIGHTS_MON_DOWN = K_NOT_A_KEY,
 	K_LIGHTS_KBD_TOGGLE = K_NOT_A_KEY,
 	K_LIGHTS_KBD_UP = K_NOT_A_KEY,
-	K_LIGHTS_KBD_DOWN = K_NOT_A_KEY
+	K_LIGHTS_KBD_DOWN = K_NOT_A_KEY,
+
+	K_SLASH = VK_SLASH
 };
 
 typedef int MMKeyCode;

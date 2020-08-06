@@ -376,6 +376,8 @@ static KeyNames key_names[] =
 	{ "lights_kbd_up",    K_LIGHTS_KBD_UP },
 	{ "lights_kbd_down",  K_LIGHTS_KBD_DOWN },
 
+	{ "slash",		K_SLASH },
+
 	{ NULL,               K_NOT_A_KEY } /* end marker */
 };
 
