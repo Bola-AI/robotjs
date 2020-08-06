@@ -295,7 +295,7 @@ enum _MMKeyCode {
 	K_LIGHTS_KBD_UP = K_NOT_A_KEY,
 	K_LIGHTS_KBD_DOWN = K_NOT_A_KEY,
 
-	K_SLASH = VK_SLASH
+	K_SLASH = VK_OEM_2
 };
 
 typedef int MMKeyCode;
